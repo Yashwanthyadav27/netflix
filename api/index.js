@@ -2,8 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 
@@ -14,36 +12,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// File-based storage (Vercel uses /tmp for writable storage)
-const DATA_FILE = path.join('/tmp', 'users.json');
-
-// Initialize users file
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify([]));
-}
+// In-memory storage for serverless (data persists during function lifetime)
+let users = [];
 
 // Helper functions
-const getUsers = () => {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
-    return [];
-  }
-};
-
-const saveUsers = (users) => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
-};
-
 const findUserByEmail = (email) => {
-  const users = getUsers();
   return users.find(u => u.email === email);
 };
 
 const addUser = (user) => {
-  const users = getUsers();
   users.push(user);
-  saveUsers(users);
   return user;
 };
 
@@ -130,7 +108,6 @@ app.get('/api/auth/verify', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const users = getUsers();
     const user = users.find(u => u.id === decoded.userId);
     
     if (!user) {
@@ -153,7 +130,6 @@ app.put('/api/auth/profile', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const users = getUsers();
     const userIndex = users.findIndex(u => u.id === decoded.userId);
     
     if (userIndex === -1) {
@@ -172,8 +148,6 @@ app.put('/api/auth/profile', async (req, res) => {
       location: location !== undefined ? location : users[userIndex].location,
       favoriteGenre: favoriteGenre !== undefined ? favoriteGenre : users[userIndex].favoriteGenre,
     };
-
-    saveUsers(users);
 
     const { password, ...userWithoutPassword } = users[userIndex];
     res.json({ message: 'Profile updated successfully', user: userWithoutPassword });
